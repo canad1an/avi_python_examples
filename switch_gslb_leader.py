@@ -43,13 +43,18 @@ class GSLB(object):
         self.api = api
         self.api_utils = ApiUtils(api)
 
-    def getGSLB(self,controller_ip):
+    def getGSLB(self,controller_ip,site_name):
         resp = self.getavicontent('gslb','')
         gslb_leader_uuid = resp[0]["leader_cluster_uuid"]
         gslb_sites = resp[0]["sites"]
-        for gslbsites in resp[0]["sites"]:
-            for ip in gslbsites["ip_addresses"]:
-                if controller_ip in ip["addr"]:
+        if site_name == '':
+            for gslbsites in resp[0]["sites"]:
+                for ip in gslbsites["ip_addresses"]:
+                    if controller_ip in ip["addr"]:
+                        current_cluster_uuid = gslbsites["cluster_uuid"]
+        else:
+            for gslbsites in resp[0]["sites"]:   
+                if gslbsites["name"] == site_name:
                     current_cluster_uuid = gslbsites["cluster_uuid"]
         return gslb_leader_uuid, current_cluster_uuid
 
@@ -69,11 +74,16 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--user', help='controller user', default='admin')
     parser.add_argument('-p', '--password', help='controller user password', default='avi123')
     parser.add_argument('-c', '--controller_ip', help='controller ip')
+    parser.add_argument('-n', '--site_name', help='Name of the current Site')
     parser.add_argument('-d', '--dry_run', help='Test the above config, but dont change anything', action='store_true')
 
     args = parser.parse_args()
     print('parsed args', args)
     controller_ip = socket.gethostbyname(args.controller_ip)
+    if (args.site_name):
+        site_name = args.site_name
+    else:
+        site_name = ''
     api = ApiSession.get_session(args.controller_ip, args.user, args.password, api_version="20.1.2")
 
     gslb = GSLB(api)
@@ -82,7 +92,7 @@ if __name__ == '__main__':
         dryrun = True
     else:
         dryrun = False
-    gslbleaderuuid, currentclusteruuid = gslb.getGSLB(controller_ip)
+    gslbleaderuuid, currentclusteruuid = gslb.getGSLB(controller_ip,site_name)
     if (currentclusteruuid == gslbleaderuuid):
         if dryrun:
             logger.debug('DRYRUN: Current controller cluster is already the gslb leader')
