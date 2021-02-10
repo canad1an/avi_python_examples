@@ -80,8 +80,8 @@ if __name__ == '__main__':
         dryrun = True
     else:
         dryrun = False
-    gslb_leader_uuid, current_cluster_uuid = gslb.getGSLB(args.controller_ip)
-    if (current_cluster_uuid == gslb_leader_uuid):
+    gslbleaderuuid, currentclusteruuid = gslb.getGSLB(args.controller_ip)
+    if (currentclusteruuid == gslbleaderuuid):
         if dryrun:
             logger.debug('DRYRUN: Current controller cluster is already the gslb leader')
         else:
@@ -91,7 +91,7 @@ if __name__ == '__main__':
             logger.debug('DRYRUN: Current controller cluster is not already the gslb leader. Running this script without dryrun will cause a leader change.')
         else:
             logger.debug('Current controller cluster is not already the gslb leader')
-            gslb.switchGSLB(current_cluster_uuid)
+            gslb.switchGSLB(currentclusteruuid)
 
 # Example Call:
 # python3 switch_gslb_leader.py -u 'admin' -p 'Avipassword1' -c '10.10.10.10' -d
