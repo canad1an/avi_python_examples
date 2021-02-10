@@ -68,18 +68,30 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--user', help='controller user', default='admin')
     parser.add_argument('-p', '--password', help='controller user password', default='avi123')
     parser.add_argument('-c', '--controller_ip', help='controller ip')
+    parser.add_argument('-d', '--dry_run', help='Test the above config, but dont change anything', action='store_true')
 
     args = parser.parse_args()
     print('parsed args', args)
     api = ApiSession.get_session(args.controller_ip, args.user, args.password, api_version="20.1.2")
-    
+
     gslb = GSLB(api)
+
+    if args.dry_run is not False:
+        dryrun = True
+    else:
+        dryrun = False
     gslb_leader_uuid, current_cluster_uuid = gslb.getGSLB(args.controller_ip)
     if (current_cluster_uuid == gslb_leader_uuid):
-        logger.debug('Current controller cluster is already the gslb leader')
+        if dryrun:
+            logger.debug('DRYRUN: Current controller cluster is already the gslb leader')
+        else:
+            logger.debug('Current controller cluster is already the gslb leader')
     else:
-        logger.debug('Current controller cluster is not already the gslb leader')
-        gslb.switchGSLB(current_cluster_uuid)
+        if dryrun:
+            logger.debug('DRYRUN: Current controller cluster is not already the gslb leader. Running this script without dryrun will cause a leader change.')
+        else:
+            logger.debug('Current controller cluster is not already the gslb leader')
+            gslb.switchGSLB(current_cluster_uuid)
 
 # Example Call:
-# python3 switch_gslb_leader.py -u 'admin' -p 'Avipassword1' -c '10.10.10.10'
+# python3 switch_gslb_leader.py -u 'admin' -p 'Avipassword1' -c '10.10.10.10' -d
