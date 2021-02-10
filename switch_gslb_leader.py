@@ -75,7 +75,7 @@ if __name__ == '__main__':
     
     gslb = GSLB(api)
     gslb_leader_uuid, current_cluster_uuid = gslb.getGSLB(args.controller_ip)
-    if (current_cluster_uuid != gslb_leader_uuid):
+    if (current_cluster_uuid == gslb_leader_uuid):
         logger.debug('Current controller cluster is already the gslb leader')
     else:
         logger.debug('Current controller cluster is not already the gslb leader')
