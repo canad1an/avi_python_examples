@@ -3,6 +3,7 @@ import argparse
 import json
 import logging
 import sys
+import socket
 
 from avi.sdk.avi_api import ApiSession
 from avi.sdk.utils.api_utils import ApiUtils
@@ -72,6 +73,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     print('parsed args', args)
+    controller_ip = socket.gethostbyname(args.controller_ip)
     api = ApiSession.get_session(args.controller_ip, args.user, args.password, api_version="20.1.2")
 
     gslb = GSLB(api)
@@ -80,7 +82,7 @@ if __name__ == '__main__':
         dryrun = True
     else:
         dryrun = False
-    gslbleaderuuid, currentclusteruuid = gslb.getGSLB(args.controller_ip)
+    gslbleaderuuid, currentclusteruuid = gslb.getGSLB(controller_ip)
     if (currentclusteruuid == gslbleaderuuid):
         if dryrun:
             logger.debug('DRYRUN: Current controller cluster is already the gslb leader')
