@@ -64,7 +64,6 @@ class GSLBSERVICE(object):
         gsdic = self.getGSLBSERVICES()
         gsdic_new = gsdic
         gsc=0
-        print (dryrun)
         for gs in gsdic:
             grc=0
             for group in gs["groups"]:
