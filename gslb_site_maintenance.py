@@ -3,7 +3,6 @@ import argparse
 import json
 import logging
 import sys
-import socket
 
 from avi.sdk.avi_api import ApiSession
 from avi.sdk.utils.api_utils import ApiUtils
@@ -72,7 +71,7 @@ class GSLBSERVICE(object):
                     try:
                         if member["cluster_uuid"] == cluster_uuid:
                             if dryrun:
-                                logger.debug('DRYRUN: Gslbservice: %s VS: %s' % (gsdic[gsc]["name"], gsdic[gsc]["groups"][grc]["members"][mmc]["vs_uuid"]))
+                                logger.debug('DRYRUN: Gslbservice: %s | Pool %s | VS: %s' % (gsdic[gsc]["name"], gsdic[gsc]["groups"][grc]["name"], gsdic[gsc]["groups"][grc]["members"][mmc]["vs_uuid"]))
                             else:
                                 gsdic_new[gsc]["groups"][grc]["members"][mmc]["enabled"] = False
                         mmc += 1
