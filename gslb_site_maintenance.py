@@ -71,7 +71,11 @@ class GSLBSERVICE(object):
                     try:
                         if member["cluster_uuid"] == cluster_uuid:
                             if dryrun:
-                                logger.debug('DRYRUN: Gslbservice: %s | Pool %s | VS: %s' % (gsdic[gsc]["name"], gsdic[gsc]["groups"][grc]["name"], gsdic[gsc]["groups"][grc]["members"][mmc]["vs_uuid"]))
+                                try:
+                                    ipaddr = gsdic[gsc]["groups"][grc]["members"][mmc]["ip"]["addr"]
+                                except:
+                                    ipaddr = ''
+                                logger.debug('DRYRUN: Gslbservice: %s | Pool: %s | VS: %s | IP: %s' % (gsdic[gsc]["name"], gsdic[gsc]["groups"][grc]["name"], gsdic[gsc]["groups"][grc]["members"][mmc]["vs_uuid"], ipaddr))
                             else:
                                 gsdic_new[gsc]["groups"][grc]["members"][mmc]["enabled"] = False
                         mmc += 1
