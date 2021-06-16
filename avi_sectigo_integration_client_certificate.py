@@ -1,8 +1,7 @@
 '''
-This is to be used as a certificate management profile in Avi Networks. This will integrate with the public CA Sectigo.
-This is the client certificate version.
 Parameters -
     user                - Sectigo user name.
+    password            - Secitgo password.
     orgid               - Secitgo org id.
     customeruri         - Secitogo customer URI.
     certtype            - Certificate type. Default type 3.
@@ -10,14 +9,27 @@ Parameters -
     comments            - Comments for order.
 '''
 
-import json, time, requests, os
+import json, time, requests, os, re, logging, os, sys, subprocess
 from tempfile import NamedTemporaryFile
+from avi.infrastructure.avi_logging import get_root_logger
 
-def get_crt(csr, user, orgid, certtype, term, comments, customeruri, client_crt, client_key):
+log = get_root_logger(__name__, '/opt/avi/log/sectigo.log', logging.DEBUG)
 
-    def _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, client_crt, client_key):
+
+def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, client_crt, client_key):
+
+    # helper function - run external commands
+    def _cmd(cmd_list, stdin=None, cmd_input=None, err_msg="Command Line Error"):
+        proc = subprocess.Popen(cmd_list, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = proc.communicate(cmd_input)
+        if proc.returncode != 0:
+            raise IOError("{0}\n{1}".format(err_msg, err))
+        return out
+
+    def _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, sannames, client_crt, client_key):
         payload = {
             "orgId": orgid,
+            "subjAltNames": sannames,
             "csr": csr,
             "certType": certtype,
             "term": term,
@@ -27,12 +39,12 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, client_crt,
             "login": user,
             "customerUri": customeruri
             }
-        print ("Generating certificate...")
+        log.info("Generating certificate...!")
         r = requests.post ("https://cert-manager.com/private/api/ssl/v1/enroll/", json=payload, headers=headers, cert=(client_crt, client_key))
         if r.status_code >= 300:
             err_msg = "Failed to generate certificate. Response status - {}, text - {}".format(r.status_code, r.text)
             raise Exception(err_msg)
-        print ("Certificate Generated..." + r.text)
+        log.info("Certificate Generated..." + r.text)
         return json.loads(r.text)
 
     def _get_certificate(user, customeruri, sslid, formattype, client_crt, client_key):
@@ -40,17 +52,36 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, client_crt,
             "login": user,
             "customerUri": customeruri
             }
-        print ("Downloading certificate...")
+        log.info("Downloading certificate")
         r = requests.get ("https://cert-manager.com/private/api/ssl/v1/collect/" + str(sslid) + "/" + formattype, headers=headers, cert=(client_crt, client_key))
         if r.status_code >= 300:
             err_msg = "Failed to download certificate. Response status - {}, text - {}".format(r.status_code, r.text)
             raise Exception(err_msg)
-        print ("Certificate downloaded..." + r.text)
+        log.info("Certificate downloaded..." + r.text)
         return r.text
 
-    crt_id = _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, client_crt, client_key)
-    time.sleep(20)
+    # find domains
+    log.info("Parsing CSR...")
+    out = _cmd(["openssl", "req", "-in", csrfile, "-noout", "-text"], err_msg="Error loading {0}".format(csrfile))
+    domains = set([])
+    common_name = re.search(r"Subject:.*? CN\s?=\s?([^\s,;/]+)", out.decode('utf8'))
+    if common_name is not None:
+        domains.add(common_name.group(1))
+    subject_alt_names = re.search(r"X509v3 Subject Alternative Name: (?:critical)?\n +([^\n]+)\n", out.decode('utf8'), re.MULTILINE|re.DOTALL)
+    if subject_alt_names is not None:
+        for san in subject_alt_names.group(1).split(", "):
+            if san.startswith("DNS:"):
+                domains.add(san[4:])
+    domains = ",".join(domains)
+    log.info("Found domains: {0}".format(domains))
+
+    crt_id = _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, domains, client_crt, client_key)
+    time.sleep(15)
     cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
+    while "BEGIN CERTIFICATE" not in cert:
+        log.info("Not found yet" + cert)
+        time.sleep(15)
+        cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
     return cert
 
 def certificate_request(csr, common_name, kwargs):
@@ -86,11 +117,25 @@ def certificate_request(csr, common_name, kwargs):
     with open(key_temp_file.name, 'w') as f:
         f.write(client_key)
 
+    csr_temp_file = NamedTemporaryFile(mode='w',delete=False)
+    csr_temp_file.close()
+    with open(csr_temp_file.name, 'w') as f:
+        f.write(csr)
+
+    exception_occured = None
     signed_crt = None
     try:
-        signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, crt_temp_file.name, key_temp_file.name)
+        signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, csr_temp_file.name, crt_temp_file.name, key_temp_file.name)
+    except:
+        exception_occured = sys.exc_info()
     finally:
+        os.remove(csr_temp_file.name)
         os.remove(crt_temp_file.name)
         os.remove(key_temp_file.name)
+
+    if not signed_crt:
+        log.error(exception_occured)
+        raise exception_occured
+    log.info(signed_crt)
 
     return signed_crt
