@@ -1,12 +1,14 @@
 '''
 Parameters -
     user                - Sectigo user name.
-    password            - Secitgo password.
     orgid               - Secitgo org id.
     customeruri         - Secitogo customer URI.
     certtype            - Certificate type. Default type 3.
     term                - Certificate term. Default 365.
     comments            - Comments for order.
+    wait_timer          - Wait time between queries to get the generated certificate
+    client_certificate  - The client certificate exactly as it appears. Do not modify formatting
+    client_key          - The client key exactly as it appears. Do not modify formatting
 '''
 
 import json, time, requests, os, re, logging, os, sys, subprocess
@@ -16,7 +18,7 @@ from avi.infrastructure.avi_logging import get_root_logger
 log = get_root_logger(__name__, '/opt/avi/log/sectigo.log', logging.DEBUG)
 
 
-def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, client_crt, client_key):
+def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, client_crt, client_key, wait_timer):
 
     # helper function - run external commands
     def _cmd(cmd_list, stdin=None, cmd_input=None, err_msg="Command Line Error"):
@@ -76,11 +78,11 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, cl
     log.info("Found domains: {0}".format(domains))
 
     crt_id = _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, domains, client_crt, client_key)
-    time.sleep(15)
+    time.sleep(int(wait_timer))
     cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
     while "BEGIN CERTIFICATE" not in cert:
         log.info("Not found yet" + cert)
-        time.sleep(15)
+        time.sleep(int(wait_timer))
         cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
     return cert
 
@@ -91,6 +93,9 @@ def certificate_request(csr, common_name, kwargs):
     certtype = kwargs.get("certtype", "3")
     term = kwargs.get("term", "365")
     comments = kwargs.get("comments", "")
+    wait_timer = kwargs.get("wait_timer", 15)
+    client_certificate = kwargs.get("client_certificate", None)
+    client_key = kwargs.get("client_key", None)
 
     if not user:
         raise Exception("Missing user argument.")
@@ -98,15 +103,20 @@ def certificate_request(csr, common_name, kwargs):
         raise Exception("Missing orgid argument.")
     if not customeruri:
         raise Exception("Missing customeruri argument.")
+    if not client_certificate:
+        raise Exception("Missing client_certificate argument.")
+    if not client_key:
+        raise Exception("Missing client_key argument.")
+    
+    client_key = client_key[31:-29]
+    client_key = client_key.replace(' ', '\n')
+    client_key = "-----BEGIN RSA PRIVATE KEY-----" +  client_key + "-----END RSA PRIVATE KEY-----\n"
+    client_crt = client_certificate[27:-25]
+    client_crt = client_crt.replace(' ', '\n') 
+    client_crt = "-----BEGIN CERTIFICATE-----" +  client_crt + "-----END CERTIFICATE-----\n"
 
-    client_key = '''-----BEGIN RSA PRIVATE KEY-----
-
------END RSA PRIVATE KEY-----'''
-
-    client_crt = '''-----BEGIN CERTIFICATE-----
-
------END CERTIFICATE-----'''
-
+    log.info(client_key)
+    log.info(client_crt)
     crt_temp_file = NamedTemporaryFile(mode='w',delete=False)
     crt_temp_file.close()
     with open(crt_temp_file.name, 'w') as f:
@@ -125,7 +135,7 @@ def certificate_request(csr, common_name, kwargs):
     exception_occured = None
     signed_crt = None
     try:
-        signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, csr_temp_file.name, crt_temp_file.name, key_temp_file.name)
+        signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, csr_temp_file.name, crt_temp_file.name, key_temp_file.name, wait_timer)
     except:
         exception_occured = sys.exc_info()
     finally:
