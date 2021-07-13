@@ -3,10 +3,10 @@ Parameters -
     user                - Sectigo user name.
     orgid               - Secitgo org id.
     customeruri         - Secitogo customer URI.
-    certtype            - Certificate type. Default type 3.
-    term                - Certificate term. Default 365.
+    certtype            - Optional - Certificate type. Default type 3.
+    term                - Optional - Certificate term. Default 365.
     comments            - Comments for order.
-    wait_timer          - Wait time between queries to get the generated certificate
+    wait_timer          - Optional - Wait time between queries to get the generated certificate. Default to 15s
     client_certificate  - The client certificate exactly as it appears. Do not modify formatting
     client_key          - The client key exactly as it appears. Do not modify formatting
 '''
@@ -67,10 +67,10 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, cl
     out = _cmd(["openssl", "req", "-in", csrfile, "-noout", "-text"], err_msg="Error loading {0}".format(csrfile))
     domains = set([])
     common_name = re.search(r"Subject:.*? CN\s?=\s?([^\s,;/]+)", out.decode('utf8'))
-    if common_name is not None:
+    if common_name:
         domains.add(common_name.group(1))
     subject_alt_names = re.search(r"X509v3 Subject Alternative Name: (?:critical)?\n +([^\n]+)\n", out.decode('utf8'), re.MULTILINE|re.DOTALL)
-    if subject_alt_names is not None:
+    if subject_alt_names:
         for san in subject_alt_names.group(1).split(", "):
             if san.startswith("DNS:"):
                 domains.add(san[4:])
@@ -78,10 +78,10 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, cl
     log.info("Found domains: {0}".format(domains))
 
     crt_id = _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, domains, client_crt, client_key)
-    time.sleep(int(wait_timer))
-    cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
-    while "BEGIN CERTIFICATE" not in cert:
-        log.info("Not found yet" + cert)
+
+    cert = None
+    while cert is None:
+        log.info("Certificate not available for download yet.. retrying..")
         time.sleep(int(wait_timer))
         cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
     return cert
@@ -115,8 +115,6 @@ def certificate_request(csr, common_name, kwargs):
     client_crt = client_crt.replace(' ', '\n') 
     client_crt = "-----BEGIN CERTIFICATE-----" +  client_crt + "-----END CERTIFICATE-----\n"
 
-    log.info(client_key)
-    log.info(client_crt)
     crt_temp_file = NamedTemporaryFile(mode='w',delete=False)
     crt_temp_file.close()
     with open(crt_temp_file.name, 'w') as f:
@@ -132,20 +130,16 @@ def certificate_request(csr, common_name, kwargs):
     with open(csr_temp_file.name, 'w') as f:
         f.write(csr)
 
-    exception_occured = None
     signed_crt = None
     try:
         signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, csr_temp_file.name, crt_temp_file.name, key_temp_file.name, wait_timer)
-    except:
-        exception_occured = sys.exc_info()
+    except Exception as e:
+        log.info(e)
     finally:
         os.remove(csr_temp_file.name)
         os.remove(crt_temp_file.name)
         os.remove(key_temp_file.name)
 
-    if not signed_crt:
-        log.error(exception_occured)
-        raise exception_occured
     log.info(signed_crt)
 
     return signed_crt
