@@ -140,6 +140,6 @@ def certificate_request(csr, common_name, kwargs):
         os.remove(crt_temp_file.name)
         os.remove(key_temp_file.name)
 
-    log.info(signed_crt)
+    log.info("Certificate generated successfully.")
 
     return signed_crt
