@@ -56,7 +56,7 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, cl
             }
         log.info("Downloading certificate")
         r = requests.get ("https://cert-manager.com/private/api/ssl/v1/collect/" + str(sslid) + "/" + formattype, headers=headers, cert=(client_crt, client_key))
-        if r.status_code >= 300:
+        if r.status_code >= 401:
             err_msg = "Failed to download certificate. Response status - {}, text - {}".format(r.status_code, r.text)
             raise Exception(err_msg)
         log.info("Certificate downloaded..." + r.text)
