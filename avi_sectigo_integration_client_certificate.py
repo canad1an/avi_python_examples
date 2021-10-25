@@ -104,7 +104,7 @@ def certificate_request(csr, common_name, kwargs):
     term = kwargs.get("term", "365")
     comments = kwargs.get("comments", "")
     wait_timer = kwargs.get("wait_timer", 5)
-    tries = kwargs.get("tries", 10)
+    tries = int(kwargs.get("tries", 10))
     client_certificate = kwargs.get("client_certificate", None)
     client_key = kwargs.get("client_key", None)
 
