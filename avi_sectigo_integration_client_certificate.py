@@ -7,18 +7,23 @@ Parameters -
     term                - Optional - Certificate term. Default 365.
     comments            - Comments for order.
     wait_timer          - Optional - Wait time between queries to get the generated certificate. Default to 15s
+    tries               - Optional - Total number of tries to get certificate before fails. Default is 10
     client_certificate  - The client certificate exactly as it appears. Do not modify formatting
     client_key          - The client key exactly as it appears. Do not modify formatting
 '''
 
 import json, time, requests, os, re, logging, os, sys, subprocess
+from requests.exceptions import HTTPError
 from tempfile import NamedTemporaryFile
 from avi.infrastructure.avi_logging import get_root_logger
 
 log = get_root_logger(__name__, '/opt/avi/log/sectigo.log', logging.DEBUG)
 
+class Pending(Exception):
+    """Serve as a generic Exception indicating a certificate is in a pending state."""
+    CODE = -183
 
-def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, client_crt, client_key, wait_timer):
+def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, client_crt, client_key, wait_timer, tries):
 
     # helper function - run external commands
     def _cmd(cmd_list, stdin=None, cmd_input=None, err_msg="Command Line Error"):
@@ -54,12 +59,12 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, cl
             "login": user,
             "customerUri": customeruri
             }
-        log.info("Downloading certificate")
-        r = requests.get ("https://cert-manager.com/private/api/ssl/v1/collect/" + str(sslid) + "/" + formattype, headers=headers, cert=(client_crt, client_key))
-        if r.status_code >= 401:
-            err_msg = "Failed to download certificate. Response status - {}, text - {}".format(r.status_code, r.text)
-            raise Exception(err_msg)
-        log.info("Certificate downloaded..." + r.text)
+        log.info("Attempting to Downloading certificate")
+        try:
+            r = requests.get ("https://cert-manager.com/private/api/ssl/v1/collect/" + str(sslid) + "/" + formattype, headers=headers, cert=(client_crt, client_key))
+            r.raise_for_status()
+        except HTTPError as exc:
+            raise Pending(f"certificate {sslid} still in 'pending' state") from exc
         return r.text
 
     # find domains
@@ -78,12 +83,17 @@ def get_crt(csr, user, orgid, certtype, term, comments, customeruri, csrfile, cl
     log.info("Found domains: {0}".format(domains))
 
     crt_id = _generate_certificate(csr, user, orgid, certtype, term, comments, customeruri, domains, client_crt, client_key)
-
+    total_tries = 0
     cert = None
-    while cert is None:
-        log.info("Certificate not available for download yet.. retrying..")
-        time.sleep(int(wait_timer))
-        cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
+    while cert is None and total_tries < tries:
+        try:
+            cert = _get_certificate(user, customeruri, crt_id["sslId"], "x509CO", client_crt, client_key)
+        except Pending:
+            total_tries += 1
+            log.info("Certificate not available for download yet.. retries left: " + str((tries - total_tries)))
+            cert = None
+            time.sleep(int(wait_timer))
+
     return cert
 
 def certificate_request(csr, common_name, kwargs):
@@ -93,7 +103,8 @@ def certificate_request(csr, common_name, kwargs):
     certtype = kwargs.get("certtype", "3")
     term = kwargs.get("term", "365")
     comments = kwargs.get("comments", "")
-    wait_timer = kwargs.get("wait_timer", 15)
+    wait_timer = kwargs.get("wait_timer", 5)
+    tries = kwargs.get("tries", 10)
     client_certificate = kwargs.get("client_certificate", None)
     client_key = kwargs.get("client_key", None)
 
@@ -132,7 +143,7 @@ def certificate_request(csr, common_name, kwargs):
 
     signed_crt = None
     try:
-        signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, csr_temp_file.name, crt_temp_file.name, key_temp_file.name, wait_timer)
+        signed_crt = get_crt(csr, user, orgid, certtype, term, comments, customeruri, csr_temp_file.name, crt_temp_file.name, key_temp_file.name, wait_timer, tries)
     except Exception as e:
         log.info(e)
     finally:
