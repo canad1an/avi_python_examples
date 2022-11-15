@@ -118,4 +118,4 @@ if __name__ == '__main__':
 
 
 # To use this file:
-# python3 license_count_from_controller.py -u 'admin' -p 'Avipassword1' -c 10.10.10.10 10.10.10.11 10.10.10.12 -t 24
+# python3 se_metrics.py -u 'admin' -p 'Avipassword1' -c 10.10.10.10 10.10.10.11 10.10.10.12 -t 24
