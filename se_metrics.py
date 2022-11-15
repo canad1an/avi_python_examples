@@ -22,18 +22,36 @@ urllib3.disable_warnings()
 ##### Configuration #####
 
 metrics_to_use = {
-    "se_if.avg_bandwidth": {
-        "nice_name": "Throughput",
-        "format": "data"
+    "Average Throughput": {
+        "metric_name": "se_if.avg_bandwidth",
+        "format": "data",
+        "type": "mean"
         },
-    "se_stats.avg_cpu_usage": {
-        "nice_name": "Average CPU",
-        "format": "percentage"
+    "Average CPU": {
+        "metric_name": "se_stats.avg_cpu_usage",
+        "format": "percentage",
+        "type": "mean"
         },
-    "se_stats.avg_mem_usage": {
-        "nice_name": "Average Memory",
-        "format": "percentage"
+    "Average Memory": {
+        "metric_name": "se_stats.avg_mem_usage",
+        "format": "percentage",
+        "type": "mean"
         },
+    "Peak Throughput": {
+        "metric_name": "se_if.avg_bandwidth",
+        "format": "data",
+        "type": "max"
+        },
+    "Peak CPU": {
+        "metric_name": "se_stats.avg_cpu_usage",
+        "format": "percentage",
+        "type": "max"
+        },
+    "Peak Memory": {
+        "metric_name": "se_stats.avg_mem_usage",
+        "format": "percentage",
+        "type": "max"
+        }
 }
 
 ##### End Configuration #####
@@ -72,7 +90,10 @@ class AviMetrics(object):
 
     def GetSEUsage(self,ctrl,se,ctime):
         starttime = (datetime.now() - timedelta(hours = ctime)).strftime('%Y-%m-%d %H:%M:%S')
-        resp = self.api.get('analytics/metrics/serviceengine/{}?metric_id={}&step={}&start={}'.format(se,",".join(metrics_to_use.keys()),ctime*60*10,starttime))
+        ml = []
+        for m in metrics_to_use:
+            ml.append(metrics_to_use[m]["metric_name"])
+        resp = self.api.get('analytics/metrics/serviceengine/{}?metric_id={}&step={}&start={}'.format(se,",".join(set(ml)),ctime*60*10,starttime))
         if resp.status_code in range(200, 299):
             logger.info(ctrl+': SE Usage retrieved successfully')
         else:
@@ -87,26 +108,33 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--password', help='controller user password', default='avi123')
     parser.add_argument('-c', '--controller', nargs='+', help='controller ip', required=True)
     parser.add_argument('-t', '--time', type=int, help='Timeframe for query, default is past 24hrs. Time in hours', default='24')
+    parser.add_argument('-v', '--version', help='Avi Version', default="21.1.3")
 
     args = parser.parse_args()   
 
     data = {}
     for ctrl in args.controller:
         #Get List of all SEs
-        api = ApiSession.get_session(ctrl, args.user, args.password, api_version="21.1.3")
+        api = ApiSession.get_session(ctrl, args.user, args.password, api_version=args.version)
         avicontroller = AviMetrics(api)
         SEs = AviMetrics.GetSEs(avicontroller,ctrl)
         selist = []
         for SE in SEs["results"]:
-            #Get Metrics for SEs
-            metricdata = {}
-            Metrics = AviMetrics.GetSEUsage(avicontroller,ctrl,SE["config"]["uuid"],args.time)
-            for metric in Metrics["series"]:
-                if metrics_to_use[metric["header"]["name"]]["format"] == "percentage":
-                    metricdata[metrics_to_use[metric["header"]["name"]]["nice_name"]] = "{}%".format(metric["header"]["statistics"]["mean"])
-                if metrics_to_use[metric["header"]["name"]]["format"] == "data":
-                    metricdata[metrics_to_use[metric["header"]["name"]]["nice_name"]] = convert_size(metric["header"]["statistics"]["mean"])
-            selist.append({"SE Name": SE["config"]["name"], "SE uuid": SE["config"]["uuid"], "SE Metrics": metricdata })
+            try:
+                #Get Metrics for SEs
+                metricdata = {}
+                # metrics_to_use[m]["metric_name"]
+                Metrics = AviMetrics.GetSEUsage(avicontroller,ctrl,SE["config"]["uuid"],args.time)
+                for metric in metrics_to_use:
+                    for mdata in Metrics["series"]:
+                        if metrics_to_use[metric]["metric_name"] == mdata["header"]["name"]:
+                            if metrics_to_use[metric]["format"] == "percentage":
+                                metricdata[metric] = "{}%".format(mdata["header"]["statistics"][metrics_to_use[metric]["type"]])
+                            if metrics_to_use[metric]["format"] == "data":
+                                metricdata[metric] = convert_size(mdata["header"]["statistics"][metrics_to_use[metric]["type"]])
+                selist.append({"SE Name": SE["config"]["name"], "SE uuid": SE["config"]["uuid"], "SE Metrics": metricdata })
+            except:
+                pass
         #Get VS count per controller
         VS_count = AviMetrics.GetVS(avicontroller,ctrl)
         data[ctrl] = {
@@ -118,4 +146,4 @@ if __name__ == '__main__':
 
 
 # To use this file:
-# python3 se_metrics.py -u 'admin' -p 'Avipassword1' -c 10.10.10.10 10.10.10.11 10.10.10.12 -t 24
+# python3 se_metrics.py -u 'admin' -p 'Avipassword1' -c 10.10.10.10 10.10.10.11 10.10.10.12 -t 24 -v 21.1.3
