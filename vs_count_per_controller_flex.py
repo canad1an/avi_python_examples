@@ -9,6 +9,12 @@ from avi.sdk.utils.api_utils import ApiUtils
 from avi.sdk.samples.common import get_sample_ssl_params
 from requests.packages import urllib3
 
+# logger = logging.getLogger(__name__)
+# ch = logging.StreamHandler(sys.stdout)
+# root_logger = logging.getLogger()
+# root_logger.setLevel(logging.DEBUG)
+# root_logger.addHandler(ch)
+
 urllib3.disable_warnings()
 
 
@@ -81,15 +87,20 @@ if __name__ == '__main__':
     #Count Totals
     vs_count=0
     vs_by_port_count=0
+    totals_data = {}
     for vs in vs_data:
         vs_count += 1
         for po in vs_data[vs]["ports"]:
             vs_by_port_count += 1
-    vs_data["Total"] = {
+    totals_data["Total"] = {
         "Virtual Services": vs_count,
         "Virtual Services by Port": vs_by_port_count
     }
-    print(json.dumps(vs_data, indent=4, sort_keys=True))
+    if (args.verbose):
+        final_data = {**vs_data, **totals_data}
+    else:
+        final_data = totals_data
+    print(json.dumps(final_data, indent=4, sort_keys=True))
 
 # Get virtual count of each SE:
 # python virtualservice_count_per_se.py -c 10.206.114.131 -u admin -p Avi12
