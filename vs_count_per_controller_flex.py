@@ -9,12 +9,6 @@ from avi.sdk.utils.api_utils import ApiUtils
 from avi.sdk.samples.common import get_sample_ssl_params
 from requests.packages import urllib3
 
-# logger = logging.getLogger(__name__)
-# ch = logging.StreamHandler(sys.stdout)
-# root_logger = logging.getLogger()
-# root_logger.setLevel(logging.DEBUG)
-# root_logger.addHandler(ch)
-
 urllib3.disable_warnings()
 
 
