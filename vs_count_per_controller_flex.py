@@ -92,8 +92,8 @@ if __name__ == '__main__':
         for po in vs_data[vs]["ports"]:
             vs_by_port_count += 1
     vs_data["Total"] = {
-        "Total Virtual Services": vs_count,
-        "Total Virtual Services by Port": vs_by_port_count
+        "Virtual Services": vs_count,
+        "Virtual Services by Port": vs_by_port_count
     }
     print(json.dumps(vs_data, indent=4, sort_keys=True))
 
