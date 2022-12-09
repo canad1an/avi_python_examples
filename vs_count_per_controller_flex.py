@@ -55,7 +55,6 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--user', help='controller user', default='admin')
     parser.add_argument('-p', '--password', help='controller user password', default='avi123')
     parser.add_argument('-c', '--controller_ip', help='controller ip')
-    parser.add_argument('-po', '--port_separation', help='Include seperated out VS count by VS')
     parser.add_argument('-v', '--verbose', action="store_true")
 
     args = parser.parse_args()
