@@ -70,7 +70,7 @@ if __name__ == '__main__':
     root_logger.setLevel(loglevel)
     root_logger.addHandler(ch)
 
-    api = ApiSession.get_session(args.controller_ip, args.user, args.password, api_version="21.1.4")
+    api = ApiSession.get_session(args.controller_ip, args.user, args.password, api_version="21.1.4", tenant="*")
     
     vscount = VSperController(api)
     vs_data = {}
